@@ -1,4 +1,5 @@
 第一題程式碼
+
     import math
 
     def lagrange_interpolation(xs, ys):
