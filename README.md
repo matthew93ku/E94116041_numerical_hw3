@@ -1,7 +1,7 @@
 第一題程式碼
-import math
+    import math
 
-def lagrange_interpolation(xs, ys):
+    def lagrange_interpolation(xs, ys):
     """
     使用 Lagrange 插值法生成插值多項式 P(x)。
     
@@ -28,7 +28,7 @@ def lagrange_interpolation(xs, ys):
 
     return P 
 
-if __name__ == "__main__":
+    if __name__ == "__main__":
     # 已知資料點
     x_data = [0.698, 0.733, 0.768, 0.803]
     y_data = [0.7661, 0.7432, 0.7193, 0.6946]
