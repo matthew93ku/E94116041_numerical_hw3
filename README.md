@@ -71,3 +71,60 @@
     print(f"Degree 2 approximation: {approx_deg2:.6f}, error = {error_deg2:.6f}")
     print(f"Degree 3 approximation: {approx_deg3:.6f}, error = {error_deg3:.6f}")
     print(f"Degree 4 approximation: {approx_deg4:.6f}, error = {error_deg4:.6f}")
+第二題程式碼
+    import math
+    def f(x):
+    """ 定義函數 f(x) = x - e^(-x) """
+    return x - math.exp(-x)
+
+    def inverse_quadratic_interp_3points(x0, x1, x2):
+    """
+    使用三點逆二次插值法 (Inverse Quadratic Interpolation) 找 f(x) = 0 的近似解。
+
+    公式：
+      x3 = x0 * (f1 * f2) / ((f0 - f1) * (f0 - f2))
+         + x1 * (f0 * f2) / ((f1 - f0) * (f1 - f2))
+         + x2 * (f0 * f1) / ((f2 - f0) * (f2 - f1))
+         
+    其中：
+      f0 = f(x0), f1 = f(x1), f2 = f(x2)
+
+    參數:
+        x0, x1, x2: 目前的三個近似根
+
+    回傳:
+        x3: 新的近似根
+    """
+    f0, f1, f2 = f(x0), f(x1), f(x2)
+
+    x3 = (x0 * (f1 * f2) / ((f0 - f1) * (f0 - f2)) +
+          x1 * (f0 * f2) / ((f1 - f0) * (f1 - f2)) +
+          x2 * (f0 * f1) / ((f2 - f0) * (f2 - f1)))
+
+    return x3
+
+    if __name__ == "__main__":
+    # 初始值
+    x0, x1, x2 = 0.4, 0.5, 0.6  
+    tol = 1e-8  # 允許誤差
+    max_iter = 200  # 最大迭代次數
+
+    print("\n==== Inverse Quadratic Interpolation for f(x) = x - e^(-x) ====")
+    print("Iter |    x0     |    x1     |    x2     |    x_new    |   f(x_new)   ")
+    print("-----+-----------+-----------+-----------+-------------+-------------")
+
+    for i in range(max_iter):
+        x3 = inverse_quadratic_interp_3points(x0, x1, x2)
+        fx3 = f(x3)
+
+        print(f"{i+1:3d}  | {x0:9.6f} | {x1:9.6f} | {x2:9.6f} | {x3:11.8f} | {fx3:12.6e}")
+
+        # 收斂條件：|f(x3)| < tol
+        if abs(fx3) < tol:
+            print(f"\n收斂於 x = {x3:.8f}")
+            break
+
+        # 更新 x0, x1, x2：捨棄最舊的點，保留最新的 x3
+        x0, x1, x2 = x1, x2, x3
+
+    print(f"\n最終近似解 x = {x3:.8f}, f(x) = {fx3:.8f}\n")
