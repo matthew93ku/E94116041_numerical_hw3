@@ -133,132 +133,125 @@
     
 第三題程式碼
 
-    # === 1. 設定已知數據 ===
-    T_data = [0, 3, 8, 13]      # 時間 (秒)
-    D_data = [0, 200, 620, 990] # 位置 (英尺)
-    V_data = [75, 77, 74, 72]   # 速度 (英尺/秒)
-
-    # 55 mph 轉換為 ft/s
-    speed_limit = 55 * 5280 / 3600  # ≈ 80.67 ft/s
+    import numpy as np
+    from scipy.optimize import fsolve
     
-    # === 2. 定義 Hermite 插值基底函數 ===
-    def h00(tau): return 2*tau**3 - 3*tau**2 + 1
-    def h10(tau): return tau**3 - 2*tau**2 + tau
-    def h01(tau): return -2*tau**3 + 3*tau**2
-    def h11(tau): return tau**3 - tau**2
-
-    # 對 τ 微分
-    def dh00_dtau(tau): return 6*tau**2 - 6*tau
-    def dh10_dtau(tau): return 3*tau**2 - 4*tau + 1
-    def dh01_dtau(tau): return -6*tau**2 + 6*tau
-    def dh11_dtau(tau): return 3*tau**2 - 2*tau
+    # 給定的數據點
+    t_points = [0, 3, 5, 8, 13]  # 時間 T (秒)
+    d_points = [0, 200, 375, 620, 990]  # 距離 D (英尺)
+    v_points = [75, 77, 80, 74, 72]  # 速度 V (英尺/秒)
     
-    # === 3. Hermite 插值函數 ===
-    def hermite_segment(t, t0, t1, d0, d1, v0, v1):
-    """
-    在單一區間 [t0, t1] 進行 Hermite 插值，計算 t 時的位置與速度。
-    """
-    L = t1 - t0  # 區間長度
-    tau = (t - t0) / L  # 無因次變數
-
-    # 計算位置 H(t)
-    pos = h00(tau) * d0 + h10(tau) * L * v0 + h01(tau) * d1 + h11(tau) * L * v1
-
-    # 計算速度 dH(t)/dt
-    dpos_dtau = (dh00_dtau(tau) * d0 + dh10_dtau(tau) * L * v0 +
-                 dh01_dtau(tau) * d1 + dh11_dtau(tau) * L * v1)
-    vel = dpos_dtau / L  # dH/dt = dH/dτ * dτ/dt
-
-    return pos, vel
+    # Hermite 插值的基礎：計算除法差分表
+    def divided_differences(t_points, d_points, v_points):
+        n = len(t_points)
+        z = np.zeros(2 * n)  
+        Q = np.zeros((2 * n, 2 * n))  
+        
+        for i in range(n):
+            z[2 * i] = t_points[i]
+            z[2 * i + 1] = t_points[i]
+        
+        for i in range(n):
+            Q[2 * i, 0] = d_points[i]  
+            Q[2 * i + 1, 0] = d_points[i]
+            Q[2 * i + 1, 1] = v_points[i]  
+        
+        for i in range(2, 2 * n):
+            for j in range(2, i + 1):
+                if j == 2 and i % 2 == 1:
+                    continue  
+                Q[i, j] = (Q[i, j-1] - Q[i-1, j-1]) / (z[i] - z[i-j])
+        
+        coeffs = [Q[i, i] for i in range(2 * n)]
+        return z, coeffs
     
-    # === 4. 找到 t 所屬的區間，並計算 Hermite 插值 ===
-    def car_position_speed(t, T, D, V):
-    """
-    在時間 t 查詢車輛的 (位置, 速度)，使用 Hermite 插值法。
-    """
-    n = len(T) - 1
-    for i in range(n):
-        if T[i] <= t <= T[i+1]:
-            return hermite_segment(t, T[i], T[i+1], D[i], D[i+1], V[i], V[i+1])
-
-    # 若 t 超出範圍，返回邊界值
-    return (D[0], V[0]) if t < T[0] else (D[-1], V[-1])
-
-    # === 5. (a) 計算 t=10 秒時的 位置與速度 ===
-    t_query = 10
-    pos_10, vel_10 = car_position_speed(t_query, T_data, D_data, V_data)
-    print(f"(a) t={t_query} s: position = {pos_10:.2f} ft, speed = {vel_10:.2f} ft/s")
-
-    # === 6. (b) 找到第一次超過 55 mph (≈80.67 ft/s) 的時間 ===
-    def first_time_exceed_speed(T, D, V, limit_speed):
-    """
-    找到車輛第一次超過 speed_limit 的時間，若無則回傳 None。
-    """
-    n = len(T) - 1
-    for i in range(n):
-        t0, t1 = T[i], T[i+1]
-
-        # 定義速度函數 speed_fun(t)
-        def speed_fun(t):
-            _, v = hermite_segment(t, t0, t1, D[i], D[i+1], V[i], V[i+1])
-            return v
-
-        # 先檢查區間端點
-        if speed_fun(t0) > limit_speed:
-            return t0
-        if speed_fun(t1) > limit_speed:
-            return t1
-
-        # 在 (t0, t1) 內尋找速度是否超過 limit_speed
-        steps = 20
-        for k in range(steps+1):
-            tk = t0 + (t1 - t0) * k / steps
-            if speed_fun(tk) > limit_speed:
-                return tk
-    return None
-
-    exceed_time = first_time_exceed_speed(T_data, D_data, V_data, speed_limit)
-    if exceed_time is None:
-        print("(b) The car never exceeds 55 mph.")
+    # 計算 Hermite 插值多項式的值
+    def hermite_interpolation(t, t_points, d_points, v_points):
+        z, coeffs = divided_differences(t_points, d_points, v_points)
+        n = len(t_points)
+        result = coeffs[0]  
+        product = 1.0
+        for i in range(1, 2 * n):
+            product *= (t - z[i-1])
+            result += coeffs[i] * product
+        return result
+    
+    # 計算 Hermite 插值多項式的導數
+    def hermite_derivative(t, t_points, d_points, v_points):
+        z, coeffs = divided_differences(t_points, d_points, v_points)
+        n = len(t_points)
+        result = 0.0
+        for i in range(1, 2 * n):
+            term = 0.0
+            for j in range(i):
+                prod = 1.0
+                for k in range(i):
+                    if k != j:
+                        prod *= (t - z[k])
+                term += prod
+            result += coeffs[i] * term
+        return result
+    
+    # 計算 Hermite 插值多項式的二階導數
+    def hermite_second_derivative(t, t_points, d_points, v_points, h=1e-5):
+        return (hermite_derivative(t + h, t_points, d_points, v_points) - 
+                hermite_derivative(t - h, t_points, d_points, v_points)) / (2 * h)
+    
+    # a. 預測 t = 10 時的位置和速度
+    t_target = 10
+    position = hermite_interpolation(t_target, t_points, d_points, v_points)
+    speed = hermite_derivative(t_target, t_points, d_points, v_points)
+    print(f"\na. At t = {t_target} seconds:")
+    print(f"Position: {position:.2f} feet")
+    print(f"Speed: {speed:.2f} feet/second")
+    
+    # b. 何時首次超過 55 mi/h
+    speed_limit_mph = 55
+    speed_limit_fps = speed_limit_mph * 5280 / 3600  
+    print(f"\nb. Speed limit: {speed_limit_mph} mi/h = {speed_limit_fps:.2f} feet/second")
+    
+    # 定義方程：H'(t) - speed_limit = 0
+    def speed_equation(t):
+        return hermite_derivative(t, t_points, d_points, v_points) - speed_limit_fps
+    
+    t_first_exceed = None
+    for i in range(len(t_points) - 1):
+        t_start = t_points[i]
+        t_end = t_points[i + 1]
+        
+        speed_start = hermite_derivative(t_start, t_points, d_points, v_points)
+        speed_end = hermite_derivative(t_end, t_points, d_points, v_points)
+        
+        if (speed_start - speed_limit_fps) * (speed_end - speed_limit_fps) < 0:
+            t_exceed = fsolve(speed_equation, [(t_start + t_end) / 2])[0]
+            if t_start <= t_exceed <= t_end:  
+                t_first_exceed = t_exceed
+                break  
+    
+    if t_first_exceed is not None:
+        print(f"First time exceeding speed limit: t = {t_first_exceed:.2f} seconds")
     else:
-        print(f"(b) The car first exceeds 55 mph at t ≈ {exceed_time:.4f} s.")
-
-    # === 7. (c) 找到全程最大速度及對應時間 ===
-    def find_max_speed(T, D, V):
-    """
-    找出整個區間 [T[0], T[-1]] 內的最大速度及其對應時間。
-    """
-    n = len(T) - 1
-    max_speed = -float('inf')
-    time_at_max = None
-
-    for i in range(n):
-        t0, t1 = T[i], T[i+1]
-
-        # 定義速度函數 speed_fun(t)
-        def speed_fun(t):
-            _, v = hermite_segment(t, t0, t1, D[i], D[i+1], V[i], V[i+1])
-            return v
-
-        # 檢查端點速度
-        candidates = [(t0, speed_fun(t0)), (t1, speed_fun(t1))]
-
-        # 以細分區間方式找出速度最大值
-        steps = 50
-        for k in range(steps+1):
-            tk = t0 + (t1 - t0) * k / steps
-            candidates.append((tk, speed_fun(tk)))
-
-        # 找到該區間最大速度
-        for (t, v) in candidates:
-            if v > max_speed:
-                max_speed = v
-                time_at_max = t
-
-    return max_speed, time_at_max
+        print("The car never exceeds the speed limit of 55 mi/h.")
     
-    max_speed, time_at_max = find_max_speed(T_data, D_data, V_data)
-    mph_at_max = max_speed * 3600 / 5280  # 轉換為 mph
+    # c. 預測最大速度
+    def second_derivative_equation(t):
+        return hermite_second_derivative(t, t_points, d_points, v_points)
     
-    print(f"(c) The car's maximum speed is {max_speed:.2f} ft/s at t={time_at_max:.2f} s.")
-    print(f"    (which is about {mph_at_max:.2f} mph).")
+    critical_points = []
+    for i in range(len(t_points) - 1):
+        t_start = t_points[i]
+        t_end = t_points[i + 1]
+        
+        t_critical = fsolve(second_derivative_equation, [(t_start + t_end) / 2])[0]
+        if t_start <= t_critical <= t_end:
+            critical_points.append(t_critical)
+    
+    critical_points.extend([t_points[0], t_points[-1]])
+    
+    speeds = [hermite_derivative(t, t_points, d_points, v_points) for t in critical_points]
+    max_speed = max(speeds)
+    max_speed_mph = max_speed * 3600 / 5280  
+    
+    print(f"\nc. Predicted maximum speed: {max_speed:.2f} feet/second = {max_speed_mph:.2f} mi/h")
+    print(f"Critical points for speed: {[f'{t:.2f}' for t in critical_points]}")
+
